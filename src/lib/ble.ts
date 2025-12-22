@@ -151,21 +151,26 @@ export class BleClient {
 
   private async requestDeviceWithFallback(): Promise<BluetoothDevice> {
     // Prefer namePrefix for quick pick, fallback to service filter if not found.
+    const nav = (typeof navigator !== "undefined" ? (navigator as NavigatorWithBluetooth) : undefined);
+    if (!nav?.bluetooth) {
+      throw new Error("Web Bluetooth unavailable in this context.");
+    }
+
     try {
-      return await navigator.bluetooth.requestDevice({
+      return await nav.bluetooth.requestDevice({
         filters: [{ namePrefix: "StrongTrak", services: [NUS_SERVICE_UUID] }],
         optionalServices: [NUS_SERVICE_UUID],
       });
     } catch (err) {
       console.warn("namePrefix request failed; retrying with service UUID", err);
       try {
-        return await navigator.bluetooth.requestDevice({
+        return await nav.bluetooth.requestDevice({
           filters: [{ services: [NUS_SERVICE_UUID as BluetoothServiceUUID] }],
           optionalServices: [NUS_SERVICE_UUID],
         });
       } catch (err2) {
         console.warn("service filter request failed; retrying with acceptAllDevices", err2);
-        return navigator.bluetooth.requestDevice({
+        return nav.bluetooth.requestDevice({
           acceptAllDevices: true,
           optionalServices: [NUS_SERVICE_UUID],
         });
