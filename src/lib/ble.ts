@@ -12,8 +12,11 @@ export type BleStatus =
   | "disconnected"
   | "error";
 
+type NavigatorWithBluetooth = Navigator & { bluetooth?: Bluetooth };
+
 export function isWebBluetoothSupported(): boolean {
-  return typeof navigator !== "undefined" && !!navigator.bluetooth;
+  if (typeof navigator === "undefined") return false;
+  return Boolean((navigator as NavigatorWithBluetooth).bluetooth);
 }
 
 export class BleClient {
