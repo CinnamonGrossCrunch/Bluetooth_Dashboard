@@ -52,9 +52,23 @@ export default function Home() {
   const handleSend = async (cmd: string) => {
     try {
       await ble.sendText(cmd.endsWith("\n") ? cmd : `${cmd}\n`);
+      setError(undefined); // Clear any previous errors on success
     } catch (err) {
       console.error(err);
       setError("Send failed (is RX available?)");
+    }
+  };
+
+  const handleTare = async () => {
+    await handleSend("tare");
+  };
+
+  const handleCalibrate = async () => {
+    const weight = prompt("Enter calibration weight in lbs (e.g., 5):");
+    if (weight && !isNaN(parseFloat(weight)) && parseFloat(weight) > 0) {
+      await handleSend(`cal ${weight}`);
+    } else if (weight !== null) {
+      setError("Invalid weight value");
     }
   };
 
@@ -97,11 +111,17 @@ export default function Home() {
         <button onClick={handleDisconnect} disabled={status !== "connected" && status !== "connecting"}>
           Disconnect
         </button>
-        <button onClick={() => handleSend("START")} disabled={status !== "connected"}>
-          Send START
+      </div>
+
+      <div className="status-row">
+        <button onClick={handleTare} disabled={status !== "connected"}>
+          Tare (Zero Position & Weight)
         </button>
-        <button onClick={() => handleSend("STOP")} disabled={status !== "connected"}>
-          Send STOP
+        <button onClick={handleCalibrate} disabled={status !== "connected"}>
+          Calibrate Load Cell
+        </button>
+        <button onClick={() => handleSend("status")} disabled={status !== "connected"}>
+          Request Status
         </button>
       </div>
 
@@ -141,6 +161,17 @@ export default function Home() {
             </div>
           </div>
           <div className="field">
+            <div className="label">Weight (lbs)</div>
+            <div className="value" style={{ fontSize: "2rem", fontWeight: "bold", color: state?.weight !== undefined ? "var(--accent)" : "inherit" }}>
+              {state?.weight !== undefined
+                ? `${state.weight.toFixed(2)} lbs`
+                : "--"}
+            </div>
+            <div className="hint">
+              Load cell reading from HX711
+            </div>
+          </div>
+          <div className="field">
             <div className="label">Accel (x,y,z)</div>
             <div className="value">
               {state?.accel
@@ -160,8 +191,14 @@ export default function Home() {
       </div>
 
       <div className="grid">
-        <StrokeView value={state?.strokeProxy} subtitle="Derived from pos.z or accel.z" />
-        <LiveChart value={state?.strokeProxy ?? accelMag} label="Stroke / Accel" />
+        <StrokeView 
+          value={state?.heightCm} 
+          title="Height" 
+          subtitle={`Velocity: ${state?.velocityMs?.toFixed(2) ?? '--'} m/s`}
+          minCm={0}
+          maxCm={100}
+        />
+        <LiveChart value={state?.heightCm ?? 0} label="Height (cm)" />
       </div>
 
       <div className="details">

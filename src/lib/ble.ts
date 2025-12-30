@@ -55,16 +55,15 @@ export class BleClient {
   }
 
   async connect(): Promise<void> {
-    if (!isWebBluetoothSupported()) {
-      throw new Error("Web Bluetooth not supported in this browser.");
-    }
-
     if (this.connecting) return;
     this.connecting = true;
 
-    this.setStatus("requesting");
-
     try {
+      if (!isWebBluetoothSupported()) {
+        throw new Error("Web Bluetooth not supported in this browser.");
+      }
+
+      this.setStatus("requesting");
       const device = await this.requestDeviceWithFallback();
       this.device = device;
 
@@ -150,31 +149,39 @@ export class BleClient {
   }
 
   private async requestDeviceWithFallback(): Promise<BluetoothDevice> {
-    // Prefer namePrefix for quick pick, fallback to service filter if not found.
     const nav = (typeof navigator !== "undefined" ? (navigator as NavigatorWithBluetooth) : undefined);
     if (!nav?.bluetooth) {
       throw new Error("Web Bluetooth unavailable in this context.");
     }
 
+    // For testing: show all devices immediately
+    // TODO: Re-enable filters once you confirm your device name/service
+    return nav.bluetooth.requestDevice({
+      acceptAllDevices: true,
+      optionalServices: [NUS_SERVICE_UUID],
+    });
+
+    /* Original filtered approach - uncomment once device is identified:
     try {
       return await nav.bluetooth.requestDevice({
-        filters: [{ namePrefix: "StrongTrak", services: [NUS_SERVICE_UUID] }],
+        filters: [{ namePrefix: "StrongTrak" }],
         optionalServices: [NUS_SERVICE_UUID],
       });
     } catch (err) {
-      console.warn("namePrefix request failed; retrying with service UUID", err);
+      console.warn("namePrefix request failed; trying NUS service filter", err);
       try {
         return await nav.bluetooth.requestDevice({
           filters: [{ services: [NUS_SERVICE_UUID as BluetoothServiceUUID] }],
           optionalServices: [NUS_SERVICE_UUID],
         });
       } catch (err2) {
-        console.warn("service filter request failed; retrying with acceptAllDevices", err2);
+        console.warn("service filter failed; showing all devices", err2);
         return nav.bluetooth.requestDevice({
           acceptAllDevices: true,
           optionalServices: [NUS_SERVICE_UUID],
         });
       }
     }
+    */
   }
 }

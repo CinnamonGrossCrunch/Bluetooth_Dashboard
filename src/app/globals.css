@@ -146,6 +146,37 @@ input[type="number"] {
   display: flex;
   justify-content: center;
   padding: 8px 0 4px;
+  gap: 4px;
+}
+
+.stroke-ruler {
+  position: relative;
+  width: 40px;
+  height: 240px;
+  display: flex;
+  flex-direction: column;
+}
+
+.ruler-tick {
+  position: absolute;
+  right: 0;
+  display: flex;
+  align-items: center;
+  transform: translateY(50%);
+}
+
+.ruler-label {
+  font-size: 11px;
+  color: var(--muted);
+  width: 24px;
+  text-align: right;
+  padding-right: 4px;
+}
+
+.ruler-line {
+  width: 8px;
+  height: 1px;
+  background: var(--panel-border);
 }
 
 .stroke-track {
