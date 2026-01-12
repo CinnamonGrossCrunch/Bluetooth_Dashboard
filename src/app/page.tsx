@@ -5,6 +5,10 @@ import { BleClient, BleStatus, isWebBluetoothSupported } from "../lib/ble";
 import { ParsedState } from "../lib/parser";
 import { StrokeView } from "../components/StrokeView";
 import { LiveChart } from "../components/LiveChart";
+import { WeightChart } from "../components/WeightChart";
+import { SerialOutput } from "../components/SerialOutput";
+import { StatusDisplay } from "../components/StatusDisplay";
+import { TimeControls } from "../components/TimeControls";
 
 export default function Home() {
   const [status, setStatus] = useState<BleStatus>("idle");
@@ -13,6 +17,13 @@ export default function Home() {
   const [nominalWeight, setNominalWeight] = useState<number>(50);
   const [deviceSummary, setDeviceSummary] = useState<string>("No device");
   const [supported, setSupported] = useState<boolean | null>(null);
+  
+  // Serial output state
+  const [serialLines, setSerialLines] = useState<string[]>([]);
+  const [serialPaused, setSerialPaused] = useState(false);
+  
+  // Status display state
+  const [statusResponse, setStatusResponse] = useState<string | null>(null);
 
   const ble = useMemo(() => new BleClient(), []);
 
@@ -22,12 +33,23 @@ export default function Home() {
       setStatus(s);
       setDeviceSummary(ble.getDeviceSummary());
     });
+    const offRawLine = ble.onRawLine((line) => {
+      if (!serialPaused) {
+        setSerialLines(prev => [...prev, `${new Date().toLocaleTimeString()}: ${line}`].slice(-1000)); // Keep last 1000 lines
+      }
+    });
+    const offStatusResponse = ble.onStatusResponse((response) => {
+      setStatusResponse(response);
+    });
+    
     return () => {
       offState();
       offStatus();
+      offRawLine();
+      offStatusResponse();
       ble.disconnect();
     };
-  }, [ble]);
+  }, [ble, serialPaused]);
 
   useEffect(() => {
     setSupported(isWebBluetoothSupported());
@@ -71,6 +93,21 @@ export default function Home() {
       setError("Invalid weight value");
     }
   };
+
+  const handleRequestStatus = async () => {
+    try {
+      setStatusResponse(null); // Clear previous response
+      await ble.requestStatus();
+      setError(undefined);
+    } catch (err) {
+      console.error(err);
+      setError("Status request failed");
+    }
+  };
+
+  const handleSerialPause = () => setSerialPaused(true);
+  const handleSerialResume = () => setSerialPaused(false);
+  const handleSerialClear = () => setSerialLines([]);
 
   const canUseBle = supported === true;
   const accelMag = state?.accel
@@ -120,7 +157,7 @@ export default function Home() {
         <button onClick={handleCalibrate} disabled={status !== "connected"}>
           Calibrate Load Cell
         </button>
-        <button onClick={() => handleSend("status")} disabled={status !== "connected"}>
+        <button onClick={handleRequestStatus} disabled={status !== "connected"}>
           Request Status
         </button>
       </div>
@@ -200,6 +237,25 @@ export default function Home() {
         />
         <LiveChart value={state?.heightCm ?? 0} label="Height (cm)" />
       </div>
+
+      {/* Full width weight chart */}
+      <WeightChart weight={state?.weight} />
+
+      {/* Full width status display */}
+      <StatusDisplay 
+        statusData={statusResponse}
+        onRequestStatus={handleRequestStatus}
+        isConnected={status === "connected"}
+      />
+
+      {/* Full width serial output */}
+      <SerialOutput 
+        data={serialLines}
+        isPaused={serialPaused}
+        onPause={handleSerialPause}
+        onResume={handleSerialResume}
+        onClear={handleSerialClear}
+      />
 
       <div className="details">
         <details>

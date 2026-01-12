@@ -28,14 +28,28 @@ export class BleClient {
   private parser = new LineParser();
   private stateListeners = new Set<(state: ParsedState) => void>();
   private statusListeners = new Set<(status: BleStatus) => void>();
+  private rawLineListeners = new Set<(line: string) => void>();
+  private statusResponseListeners = new Set<(response: string) => void>();
   private currentStatus: BleStatus = "idle";
   private boundNotificationHandler?: (event: Event) => void;
   private boundDisconnectHandler?: (event: Event) => void;
   private connecting = false;
+  private pendingStatusRequest = false;
+  private statusResponseBuffer = "";
 
   onState(cb: (state: ParsedState) => void): () => void {
     this.stateListeners.add(cb);
     return () => this.stateListeners.delete(cb);
+  }
+
+  onRawLine(cb: (line: string) => void): () => void {
+    this.rawLineListeners.add(cb);
+    return () => this.rawLineListeners.delete(cb);
+  }
+
+  onStatusResponse(cb: (response: string) => void): () => void {
+    this.statusResponseListeners.add(cb);
+    return () => this.statusResponseListeners.delete(cb);
   }
 
   onStatus(cb: (status: BleStatus) => void): () => void {
@@ -122,8 +136,19 @@ export class BleClient {
 
   async sendText(text: string): Promise<void> {
     if (!this.rxChar) return;
+    
+    // Check if this is a status request
+    if (text.trim() === "status" || text.trim() === "status\n") {
+      this.pendingStatusRequest = true;
+      this.statusResponseBuffer = "";
+    }
+    
     const encoder = new TextEncoder();
     await this.rxChar.writeValueWithoutResponse(encoder.encode(text));
+  }
+
+  async requestStatus(): Promise<void> {
+    await this.sendText("status\n");
   }
 
   private setStatus(status: BleStatus) {
@@ -136,9 +161,28 @@ export class BleClient {
     this.lineBuffer += chunk;
     const lines = this.lineBuffer.split(/\r?\n/);
     this.lineBuffer = lines.pop() ?? ""; // keep remainder
+    
     for (const line of lines) {
-      const parsed = this.parser.push(line);
-      for (const cb of this.stateListeners) cb(parsed);
+      if (line.trim()) {
+        // Emit raw line to listeners
+        for (const cb of this.rawLineListeners) cb(line);
+        
+        // Handle status response collection
+        if (this.pendingStatusRequest) {
+          this.statusResponseBuffer += line + "\n";
+          
+          // Check for end of status response (look for battery status or heartbeat)
+          if (line.includes("battery_status") || line.includes("heartbeat_ms")) {
+            for (const cb of this.statusResponseListeners) cb(this.statusResponseBuffer.trim());
+            this.pendingStatusRequest = false;
+            this.statusResponseBuffer = "";
+          }
+        }
+        
+        // Parse line for state updates
+        const parsed = this.parser.push(line);
+        for (const cb of this.stateListeners) cb(parsed);
+      }
     }
   }
 

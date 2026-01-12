@@ -9,6 +9,7 @@ export type ParsedState = {
   weight?: number;        // weight in lbs from load cell
   heightCm?: number;      // vertical position in cm
   velocityMs?: number;    // vertical velocity in m/s
+  worldAccelZ?: number;   // world frame Z acceleration in g
   strokeProxy?: number;
   lastLine?: string;
 };
@@ -26,7 +27,7 @@ export class LineParser {
       return { ...this.state };
     }
 
-    // Handle CSV format: "height_cm,velocity_m/s" or "height_cm,velocity_m/s,weight_lbs"
+    // Handle CSV format: "height_cm,velocity_m/s,weight_lbs,world_accel_z_g"
     if (!trimmed.includes(":") && trimmed.includes(",")) {
       const parts = trimmed.split(",").map(p => parseFloat(p.trim()));
       if (parts.length >= 2 && parts.every(v => Number.isFinite(v))) {
@@ -34,6 +35,9 @@ export class LineParser {
         this.state.velocityMs = parts[1];
         if (parts.length >= 3) {
           this.state.weight = parts[2];
+        }
+        if (parts.length >= 4) {
+          this.state.worldAccelZ = parts[3];
         }
         // Convert height to position vector for compatibility
         this.state.pos = { x: 0, y: 0, z: parts[0] / 100.0 }; // cm to meters
